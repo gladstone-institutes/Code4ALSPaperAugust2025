@@ -1,6 +1,6 @@
-# MRID Analysis for ALS Research
+# Cell death analysis
 
-This repository contains R functions and analysis scripts for MRID (Motor-neuron Ratios in vitro Death) analysis in ALS research.
+This repository contains R functions and analysis scripts for changes in cell-death over time analysis.
 
 ## Authors
 - Julia Kaye
