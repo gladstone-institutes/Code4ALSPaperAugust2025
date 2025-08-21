@@ -1,0 +1,194 @@
+---
+title: "MRID Logodd"
+author:
+  - Julia Kaye
+  - Thomas Reuben
+  - Stephanie Lam
+  - 
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+  pdf_document: default
+params:
+  update_date: "Last code update: Feb 8, 202s4"
+---
+`r params$update_date`
+
+<!-- 
+Execute notebook by clicking the *knit* button after modifying the user inputs chunk. 
+
+================================= STEP1: CHECK DATA STRUCTURE ==============================
+Folder structure example 
+Input path - Experiment1 - Experiment1_ratio_output.csv
+                         - Experiment1_timepoint.csv
+           - Experiment2 - Experiment2_ratio_output.csv
+                         - Experiment2_timepoint.csv
+ ===========================================================================================
+ -->
+
+```{r, include=FALSE}
+#================================= STEP2: Install packgaes =================================
+#libraries required, if not installed, remove # symbol on next line and run the line to install
+#install.packages(c("tidyverse", "rlang", "ggplot2", "knitr", "xtable", "lme4","dplyr"))
+library(tidyverse)
+library(rlang)
+library(ggplot2)
+library(xtable)
+library(knitr)
+library(lme4)
+library(dplyr)
+
+knitr::opts_chunk$set(fig.width=12, fig.height=8, fig.path='Figs/',dev=c('png', 'pdf'),
+                      echo=FALSE, warning=FALSE, message=FALSE)
+
+source("/Users/nalbistami/Gladstone Dropbox/Noura Al Bistami/calcPower f1000_manuscript/Death_Rates_MRID_sALSvsCTRL/Stephanie New Run/MRID_Ratio_Functions.R")
+source("/Users/nalbistami/Gladstone Dropbox/Noura Al Bistami/AALS Shared DropBox/GEDI Analysis/USE THESE CODES/MRID_Logodd_Functions_RT_July1.R")
+#===========================================================================================
+```
+
+## User Inputs 
+
+```{r user_inputs, message=FALSE, echo=FALSE, warning=FALSE}
+
+#================================= STEP3: User Inputs =================================
+# input path  = path to all experiment folders
+# output_path = path to desired output directory, should be same as where the Rmd file is located !!! Always copy a new Rmd file !!!
+input_path <- "/Users/nalbistami/Gladstone Dropbox/Noura Al Bistami/AALS Shared DropBox/GEDI Analysis/Combined Experiments/Combined_NonLinear Code/sALS high islet1"
+output_path <- '/Users/nalbistami/Gladstone Dropbox/Noura Al Bistami/AALS Shared DropBox/GEDI Analysis/Combined Experiments/Combined_NonLinear Code/sALS high islet1'
+
+
+#drug = set as TRUE if you have drug column in platelayout, otherwise, set as FALSE
+drug <- FALSE
+
+#keep_drug = for only looking at specific drug, only keep the specified drug, eg: "5uM" or c("5uM","10uM")
+#            leave as "" if would like to keep all drugs
+#keep_line = for only looking at specific line, only keep the specified line, eg: c("5NWTiCTR")
+#            leave as "" if would like to keep all lines
+#keep_line_drug = for only looking at specific condition, combine Sci_SampleID and Drug name, must have 1+ line to compare, 
+#.            eg:c("5NWTiCTR None 0.25uM", "5NWTiCTR 667 0.25uM")
+
+
+keep_drug <- c("None")
+keep_line <- c("6GNGiCTR", "5NWTiCTR", "0YX7iCTR", "3DE3iALS", "8RBNiALS", "6WKViALS")
+keep_line_drug <- ""
+
+          
+#multiple_experiments = set as TRUE if there are multiple experiments, otherwise FALSE
+#multiple_plates = set as TRUE if there are multiple plates, otherwise FALSE
+multiple_experiments <- TRUE
+multiple_plates <- FALSE
+
+
+#compare_cellline = set as TRUE if want to compare across different cell lines, otherwise FALSE
+#compare_class = set as TRUE if want to compare across different class, otherwise FALSE
+#classes = used when comparing class, match string from Sci_SampleID
+#        = if there are two classes, example: c("CTR","ALS")
+#        = first one in the list is class 0, second is class 1
+#compare_drug = set as TRUE if want to compare across different drug, otherwise FALSE
+compare_cellline <- FALSE
+compare_class <- TRUE
+classes = c("iCTR","iALS")
+compare_drug <- FALSE
+
+
+#ref_condition_list = used for lmer modelling as the reference condition
+#                  = compare across cell line: if there's drug, combine Sci_SampleID and Drug name
+#                                              if no drug, choose reference condition from Sci_SampleID
+#                                               will need one condition or more
+#                  = compare across class : leave as c() or will be ignored by default
+#                  = compare across drug : leave as c() or will be ignored by default, automatically run all conditions
+ref_condition_list = c()
+
+#enter desired color for each condition, leave as c() to use default
+#color reference: http://sape.inf.usi.ch/quick-reference/ggplot2/colour
+colorpalette <- c()
+
+#===========================================================================================
+# When done, execute notebook by clicking the *knit* button after modifying the user inputs chunk.
+
+```
+
+source directory: `r input_path`  \
+output directory: `r output_path` \
+
+drug: `r drug` \
+drug kept: `r keep_drug` \
+line kept: `r keep_line` \
+
+multiple_experiments: `r multiple_experiments` \
+multiple_plates <- `r multiple_plates` \
+
+compare_cellline <- `r compare_cellline` \
+compare_class <- `r compare_class` \
+compare_drug <-`r compare_drug` \
+
+reference conditions: `r ref_condition_list` \
+
+```{r get_data, echo=FALSE, warning=FALSE}
+create_output_dir(output_path)
+convert_old_cnnoutput(input_path)
+
+ratio_files <- list.files(path = input_path, pattern = "ratio_output[0-9_]*?.csv", recursive = TRUE)
+timepoint_files <- list.files(path = input_path, pattern = "timepoint[_hours]*?.csv", recursive = TRUE)
+
+#read data and get logodd death rates
+if (length(ratio_files) == 0 |length(timepoint_files) == 0 ) {
+  stop("ERROR: No ratio files or timepoint_files found in input directory")
+  
+} else {
+  #read data and get logodd death rates
+  logodd_data <- do.call(rbind, lapply(ratio_files, mrid_get_logodd, 
+                                      input_path = input_path, 
+                                      timepoint_hours = timepoint_files, 
+                                      multi_exp = multiple_experiments, 
+                                      multi_plates = multiple_plates))
+  
+  #finalize data, and filter dose if needed
+  logodd_data <- finalize_df(logodd_data, drug, keep_drug, keep_line, keep_line_drug, 
+                             ref_condition_list, compare_class, multiple_experiments, classes)
+  
+  write.csv(logodd_data, file.path(output_path,"Data.csv"))
+}
+```
+
+```{r death_plots, results = 'asis', echo=FALSE, warning=FALSE, fig.align = "center", message=FALSE}
+#generate death rate plots
+mrid_death_plot(logodd_data, drug, multiple_experiments, multiple_plates,  colorpalette, compare_class)
+
+```
+
+```{r residual_plots, results = 'asis', echo=FALSE, warning=FALSE, fig.align = "center", message=FALSE}
+TimepointIsNumeric <- FALSE
+mrid_residuals_plot(logodd_data, drug, multiple_experiments, multiple_plates,  colorpalette, compare_class, compare_cellline, compare_drug, TimepointIsNumeric)
+
+
+```
+
+```{r lmer_logodd_plots, results = 'asis', echo=FALSE, warning=FALSE, fig.align = "center",message=FALSE}
+#prepare data for lmer model
+mrid_lmer_condition_comparisons(logodd_data, ref_condition_list, output_path, 
+                                compare_cellline, compare_class, compare_drug, 
+                                multiple_experiments, multiple_plates, classes, TimepointIsNumeric)
+
+  
+```
+
+```{r combined_logodd_plots, results='asis', echo=FALSE, warning=FALSE, fig.align = "center", message=FALSE}
+#combining the odd ratio files
+
+odd_ratio_data = do.call(rbind,(lapply(list.files(path=output_path,pattern="^OR_",full.names = TRUE), read.csv)))
+delfiles <- list.files(path=output_path,pattern="^OR_")
+file.remove(file.path(output_path, delfiles))
+
+#plot combined log odd
+odd_ratio_data$Reference = factor(odd_ratio_data$Reference)
+
+lapply(1:length(levels(odd_ratio_data$Reference)), function(x) {
+  reference_condition = levels(odd_ratio_data$Reference)[x]
+  cat(paste0("\n\n### Odds Ratio Combined \n Reference condition: ", reference_condition))
+  cat('\n\n')
+  mrid_logodd_combine_plot(odd_ratio_data, reference_condition, output_path, colorpalette, confident_int = 0.95, compare_class)
+  cat("\n\n\\pagebreak\n")
+})
+
+```
